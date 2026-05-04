@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Favorites</title>
+</head>
+<body>
+
+<h1>❤️ Your Favorites</h1>
+<a href="index.html">← Back</a>
+
+<div id="favorites"></div>
+
+<script>
+async function loadFavorites() {
+  try {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      alert("Please login first");
+      window.location.href = "login.html";
+      return;
+    }
+
+    const res = await fetch("http://localhost:5000/favorites", {
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    });
+
+    const data = await res.json();
+
+    console.log("Favorites:", data);
+
+    const container = document.getElementById("favorites");
+    container.innerHTML = "";
+
+    // IMPORTANT CHECK
+    if (!Array.isArray(data) || data.length === 0) {
+      container.innerHTML = "<p>No favorites yet</p>";
+      return;
+    }
+
+    data.forEach(fav => {
+      const property = fav.propertyId;
+
+      const div = document.createElement("div");
+      div.classList.add("card");
+
+      div.innerHTML = `
+        <img src="${property.image || 'https://via.placeholder.com/300'}" />
+        <h3>${property.title}</h3>
+        <p>${property.location}</p>
+        <p>R ${property.price}</p>
+      `;
+
+      container.appendChild(div);
+    });
+
+  } catch (error) {
+    console.error("Error loading favorites:", error);
+  }
+}
+
+loadFavorites();
+</script>
+
+</body>
+</html>

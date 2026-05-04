@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Real Estate App</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <h1>🏡 DreamHomes</h1>
+
+  <div>
+    <a href="index.html">Home</a>
+    <a href="favorites.html">❤️ Favorites</a>
+    <a href="add.html">➕ Add Property</a>
+    <a href="admin.html">Admin</a>
+  </div>
+
+  <div>
+    <input type="text" id="search" placeholder="Search location..." />
+    <select id="typeFilter">
+      <option value="all">All</option>
+      <option value="Buy">Buy</option>
+      <option value="Rent">Rent</option>
+    </select>
+
+    <select id="priceFilter">
+      <option value="all">All Prices</option>
+      <option value="low">Below R1M</option>
+      <option value="mid">R1M - R3M</option>
+      <option value="high">Above R3M</option>
+    </select>
+  </div>
+</header>
+
+  <main>
+    <div id="properties"></div>
+  </main>
+
+  <script src="script.js"></script>
+
+</body>
+</html>

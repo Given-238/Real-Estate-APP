@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Add Property</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <h1>Add Property</h1>
+  <a href="index.html">← Back Home</a>
+</header>
+
+<main>
+  <form id="propertyForm">
+
+    <input type="text" id="title" placeholder="Title" required />
+    <input type="number" id="price" placeholder="Price" required />
+    <input type="text" id="location" placeholder="Location" required />
+
+    <select id="type">
+      <option value="Buy">Buy</option>
+      <option value="Rent">Rent</option>
+    </select>
+
+    <!-- IMAGE UPLOAD -->
+    <input type="file" id="imageFile" required />
+
+    <textarea id="description" placeholder="Description"></textarea>
+
+    <button type="submit">Add Property</button>
+  </form>
+</main>
+
+<script>
+  // =========================
+  // IMAGE UPLOAD HANDLING
+  // =========================
+  const fileInput = document.getElementById("imageFile");
+
+  let uploadedImageUrl = "";
+
+  fileInput.addEventListener("change", async () => {
+    try {
+      const formData = new FormData();
+      formData.append("image", fileInput.files[0]);
+
+      const res = await fetch("http://localhost:5000/upload", {
+        method: "POST",
+        body: formData
+      });
+
+      const data = await res.json();
+      uploadedImageUrl = data.imageUrl;
+
+      alert("Image uploaded successfully ✔");
+    } catch (error) {
+      console.error("Upload failed:", error);
+      alert("Image upload failed");
+    }
+  });
+
+  // =========================
+  // FORM SUBMIT
+  // =========================
+  const form = document.getElementById("propertyForm");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    if (!uploadedImageUrl) {
+      alert("Please upload an image first");
+      return;
+    }
+
+    const newProperty = {
+      title: document.getElementById("title").value,
+      price: Number(document.getElementById("price").value),
+      location: document.getElementById("location").value,
+      type: document.getElementById("type").value,
+      image: uploadedImageUrl,
+      description: document.getElementById("description").value
+    };
+
+    try {
+      await fetch("http://localhost:5000/properties", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(newProperty)
+      });
+
+      alert("Property added successfully ✔");
+      window.location.href = "index.html";
+
+    } catch (error) {
+      console.error("Error adding property:", error);
+      alert("Failed to add property");
+    }
+  });
+</script>
+
+</body>
+</html>

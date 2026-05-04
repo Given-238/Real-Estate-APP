@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Property Details</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+</head>
+
+<body>
+
+<header>
+  <a href="index.html">← Back</a>
+  <h1>🏡 Property Details</h1>
+</header>
+
+<div id="propertyDetails"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+const id = params.get("id");
+
+let propertyData = null;
+let bookedDates = [];
+let selectedDates = [];
+let selectedRating = 0;
+
+function isRangeBlocked(start, end) {
+  return bookedDates.some(b => {
+    return start <= b.to && end >= b.from;
+  });
+}
+
+
+// =======================
+// LOAD BOOKINGS
+// =======================
+async function loadBookings() {
+  const res = await fetch(`http://localhost:5000/bookings/${id}`);
+  const data = await res.json();
+
+  bookedDates = data.map(b => ({
+    from: new Date(b.checkIn),
+    to: new Date(b.checkOut)
+  }));
+}
+
+// =======================
+// CHECK RANGE
+// =======================
+function isRangeBlocked(start, end) {
+  return bookedDates.some(b => start <= b.to && end >= b.from);
+}
+
+// =======================
+// CALENDAR
+// =======================
+let calendarInstance;
+
+function initCalendar() {
+  // 🔥 Destroy old calendar (VERY IMPORTANT)
+  if (calendarInstance) {
+    calendarInstance.destroy();
+  }
+
+  calendarInstance = flatpickr("#dateRange", {
+    mode: "range",
+    minDate: "today",
+
+    disable: bookedDates.map(b => ({
+      from: b.from,
+      to: b.to
+    })),
+
+    onChange: function (selected) {
+      if (selected.length === 2) {
+        const start = selected[0];
+        const end = selected[1];
+
+        if (isRangeBlocked(start, end)) {
+          showError("Some dates are unavailable ❌");
+          selectedDates = [];
+          this.clear();
+          return;
+        }
+
+        selectedDates = selected;
+
+        // 💰 Show price preview
+        showPricePreview(start, end);
+      }
+    }
+  });
+}
+
+// =======================
+// LOAD PROPERTY
+//=======================
+async function loadProperty() {
+  try {
+    showLoading();
+
+    const res = await fetch(`http://localhost:5000/properties/${id}`);
+
+    // 🔥 Handle bad response
+    if (!res.ok) {
+      throw new Error("Property not found");
+    }
+
+    const property = await res.json();
+    propertyData = property;
+
+    // 🔥 ALWAYS load bookings first
+    await loadBookings();
+
+    // 🔥 Robust image handling
+    images = property.images?.length
+      ? property.images
+      : [property.image || "https://via.placeholder.com/400"];
+
+    const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(property.location)}&output=embed`;
+
+    document.getElementById("propertyDetails").innerHTML = `
+      <!-- 🖼️ IMAGE -->
+      <img 
+        id="carouselImage"
+        src="${images[0]}"
+        style="width:100%; max-width:400px; border-radius:10px;"
+        onerror="this.src='https://via.placeholder.com/400'"
+      />
+
+      <!-- 📄 INFO -->
+      <h2>${property.title}</h2>
+      <p>📍 ${property.location}</p>
+      <p>💰 R ${property.price} / night</p>
+
+      <button id="favBtn" onclick="toggleFavorite()">🤍 Save</button>
+
+      <!-- 📅 BOOKING -->
+      <h3>📅 Book</h3>
+      <input id="dateRange" placeholder="Select dates" />
+      <button onclick="bookProperty()">Book Now</button>
+      <p id="bookingStatus" style="margin-top:10px;"></p>
+
+      <!-- 🧠 UX HINT -->
+      <p style="color:gray; font-size:12px;">
+        Unavailable dates are automatically blocked
+      </p>
+
+      <!-- 🗺️ MAP -->
+      <iframe src="${mapUrl}" width="100%" height="300" style="border-radius:10px;"></iframe>
+
+      <hr>
+
+      <!-- ⭐ REVIEWS -->
+      <h3>⭐ Reviews</h3>
+      <p id="avgRating"></p>
+
+      <div id="reviewsList"></div>
+
+      <!-- ⭐ STAR INPUT -->
+      <div id="starContainer" style="font-size:20px; cursor:pointer;">
+        <span onclick="setRating(1)">☆</span>
+        <span onclick="setRating(2)">☆</span>
+        <span onclick="setRating(3)">☆</span>
+        <span onclick="setRating(4)">☆</span>
+        <span onclick="setRating(5)">☆</span>
+      </div>
+
+      <textarea id="comment" placeholder="Write review" style="width:100%; margin-top:10px;"></textarea>
+      <button onclick="submitReview()">Submit</button>
+    `;
+
+    // 🔥 MUST RUN AFTER HTML EXISTS
+    initCalendar();
+    checkFavorite();
+    loadReviews();
+
+  } catch (err) {
+    showError("Failed to load property ❌");
+    console.error(err);
+  }
+}
+
+// =======================
+// BOOK PROPERTY
+// =======================
+async function bookProperty() {
+  const token = localStorage.getItem("token");
+
+  if (!token) return showError("Login first");
+  if (selectedDates.length < 2) return showError("Select dates");
+
+  const btn = document.querySelector("button[onclick='bookProperty()']");
+  btn.disabled = true;
+  btn.innerText = "Booking...";
+
+  try {
+    const res = await fetch("http://localhost:5000/bookings", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + token
+      },
+      body: JSON.stringify({
+        propertyId: id,
+        checkIn: selectedDates[0],
+        checkOut: selectedDates[1]
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.message);
+
+    document.getElementById("bookingStatus").innerHTML =
+      `<span style="color:green;">✅ Booked!</span><br>Total: R ${data.totalPrice}`;
+
+    selectedDates = [];
+    document.getElementById("dateRange").value = "";
+
+    selectedDates = [];
+    document.getElementById("dateRange").value = "";
+
+    await loadBookings();
+    initCalendar();
+
+  } catch (err) {
+    showError(err.message);
+  }
+
+  btn.disabled = false;
+  btn.innerText = "Book Now";
+}
+
+// =======================
+// FAVORITE
+// =======================
+async function toggleFavorite() {
+  const token = localStorage.getItem("token");
+  if (!token) return showError("Login first");
+
+  const res = await fetch("http://localhost:5000/favorites", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + token
+    },
+    body: JSON.stringify({ propertyId: id })
+  });
+
+  const data = await res.json();
+
+  const btn = document.getElementById("favBtn");
+  btn.style.transition = "0.2s";
+  btn.innerText = data.liked ? "❤️ Saved" : "🤍 Save";
+}
+
+// =======================
+// REVIEWS
+// =======================
+function setRating(r) {
+  selectedRating = r;
+  document.querySelectorAll("#starContainer span")
+    .forEach((s, i) => s.innerText = i < r ? "⭐" : "☆");
+}
+
+async function loadReviews() {
+  const res = await fetch(`http://localhost:5000/reviews/${id}`);
+  const reviews = await res.json();
+
+  const list = document.getElementById("reviewsList");
+  const avgBox = document.getElementById("avgRating");
+
+  list.innerHTML = "";
+
+  if (reviews.length === 0) {
+    avgBox.innerText = "No reviews yet";
+    return;
+  }
+
+  const avg = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+  avgBox.innerText = `⭐ ${avg.toFixed(1)} (${reviews.length})`;
+
+  reviews.forEach(r => {
+    list.innerHTML += `
+      <div>
+        <p>${"⭐".repeat(r.rating)}</p>
+        <p>${r.comment}</p>
+      </div>
+    `;
+  });
+}
+
+async function submitReview() {
+  const token = localStorage.getItem("token");
+  if (!token) return showError("Login first");
+
+  const comment = document.getElementById("comment").value;
+
+  const res = await fetch("http://localhost:5000/reviews", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + token
+    },
+    body: JSON.stringify({
+      propertyId: id,
+      rating: selectedRating,
+      comment
+    })
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) return showError(data.message);
+
+  document.getElementById("comment").value = "";
+  setRating(0);
+  loadReviews();
+}
+
+// =======================
+// HELPERS
+// =======================
+function showLoading() {
+  document.getElementById("propertyDetails").innerHTML = `
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+    <p>Loading property...</p>
+  `;
+}
+
+
+// INIT
+loadProperty();
+</script>
+
+</body>
+</html>
